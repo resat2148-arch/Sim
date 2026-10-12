@@ -1,0 +1,22 @@
+{
+  "name": "notfall-simulator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Notfall-Simulator: Monte-Carlo-Simulationen für deutschsprachige YouTube Shorts",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  }
+}
