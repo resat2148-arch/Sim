@@ -38,6 +38,7 @@ import {
 } from "../../core/scenario/index.ts";
 import { kmhToMs } from "../../core/units/index.ts";
 import type { ReportConfig } from "../../core/report/index.ts";
+import type { ShortConfig } from "../../core/render/props.ts";
 
 export const META: ScenarioMeta = {
   id: "median-crossing",
@@ -363,3 +364,19 @@ export function sampleForRagdoll(req: SampleRequest): { trial: number; plan: Tri
   };
   return { trial, plan, motion };
 }
+
+// --- Short ------------------------------------------------------------------
+
+/**
+ * Denemeler bölümünün hikâyesi (kullanıcıyla değiştirilebilir):
+ * kendinden emin Kurt zıplar, sakin Bernd yerinde kalır, sakar Jonas yana kaçar.
+ */
+export const SHORT: ShortConfig = {
+  tableId: "vehicle:limousine",
+  attempts: [
+    { characterId: "kurt", strategyId: "springen" },
+    { characterId: "bernd", strategyId: "stehen" },
+    { characterId: "jonas", strategyId: "ausweichen" },
+  ],
+  scoreboardStrategies: ["springen", "stehen", "ausweichen"],
+};

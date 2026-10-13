@@ -15,16 +15,29 @@
     "scenario": "tsx scripts/run-scenario.ts",
     "report": "tsx scripts/report.ts",
     "ragdoll": "tsx scripts/ragdoll.ts",
-    "ragdoll:preview": "tsx scripts/ragdoll-preview.ts"
+    "ragdoll:preview": "tsx scripts/ragdoll-preview.ts",
+    "short:props": "tsx scripts/short-props.ts",
+    "short:studio": "remotion studio core/render/index.ts",
+    "short:still": "remotion still core/render/index.ts Short --props=out/median-crossing/short-props.json --gl=swangle",
+    "short:render": "remotion render core/render/index.ts Short out/median-crossing/short.mp4 --props=out/median-crossing/short-props.json"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/three": "^0.186.0",
     "playwright-core": "^1.56.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.4"
   },
   "dependencies": {
-    "@dimforge/rapier3d-compat": "^0.21.0"
+    "@dimforge/rapier3d-compat": "^0.21.0",
+    "@react-three/fiber": "^9.8.1",
+    "@remotion/cli": "^4.0.535",
+    "@remotion/three": "^4.0.535",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "remotion": "^4.0.535",
+    "three": "^0.186.1"
   }
 }
