@@ -5,6 +5,7 @@ import { getCharacter, motorCapacity } from "../dummies/index.ts";
 import {
   approachTiming,
   bodyHalfWidth,
+  bodyInPath,
   hipRiseAtImpact,
   JUMP_PREP_TIME,
   lateralContact,
@@ -61,6 +62,13 @@ describe("yana kaçış", () => {
     expect(lateralContact(0, 1.8, half).overlap).toBeCloseTo(0.9 + half);
     expect(lateralContact(1.0, 1.8, half).contact).toBe(true); // sıyırma
     expect(lateralContact(-1.2, 1.8, half).contact).toBe(false);
+  });
+
+  it("bodyInPath: tam içeride 1, sıyırmada kesirli, dışarıda 0", () => {
+    const half = 0.25;
+    expect(bodyInPath(lateralContact(0, 1.8, half), half)).toBe(1);
+    expect(bodyInPath(lateralContact(0.9, 1.8, half), half)).toBeCloseTo(0.5);
+    expect(bodyInPath(lateralContact(2, 1.8, half), half)).toBe(0);
   });
 
   it("doğru yön kaçırır, yanlış yön araca doğru götürür", () => {

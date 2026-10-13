@@ -131,3 +131,8 @@ export function hipRiseAtImpact({ movementTime, jumpHeight, rng, timingSd = JUMP
   if (s <= 0 || s >= 2 * tApex) return 0;
   return v0 * s - (G * s * s) / 2;
 }
+
+/** Gövdenin araç yolunda kalan oranı (0–1): örtüşme / gövde genişliği. */
+export function bodyInPath(contact: LateralContact, halfBody: number): number {
+  return Math.min(1, Math.max(0, contact.overlap / (2 * halfBody)));
+}
