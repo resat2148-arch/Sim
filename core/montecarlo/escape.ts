@@ -136,3 +136,55 @@ export function hipRiseAtImpact({ movementTime, jumpHeight, rng, timingSd = JUMP
 export function bodyInPath(contact: LateralContact, halfBody: number): number {
   return Math.min(1, Math.max(0, contact.overlap / (2 * halfBody)));
 }
+
+// --- Yol boyunca kaçış (geri çekilme) ---------------------------------------
+
+/** Aracın t anında aldığı yol (m); frenle durduktan sonra sabit kalır. */
+export function vehiclePosition({ speed, deceleration = 0 }: Approach, t: number): number {
+  if (deceleration === 0) return speed * t;
+  const tStop = speed / deceleration;
+  const s = Math.min(t, tStop);
+  return speed * s - (deceleration * s * s) / 2;
+}
+
+export type PursuitResult =
+  | { readonly impact: true; readonly timeToImpact: number; readonly relativeSpeed: number }
+  | { readonly impact: false };
+
+const PURSUIT_HORIZON = 10;
+
+/**
+ * Yaya aracın geliş doğrultusunda ondan uzağa kaçar (geri çekilir / koşar).
+ * Araç yayaya yetişirse çarpma hızı, araç hızı ile yaya hızının farkıdır.
+ * Yön değiştirme maliyeti yana kaçışla aynı kabul edilir (LATERAL_EFFICIENCY).
+ */
+export function pursuit(
+  approach: Approach,
+  reactionTime: number,
+  motor: Pick<MotorSample, "vmax" | "tau">,
+): PursuitResult {
+  const { speed, detectionDistance, deceleration = 0 } = approach;
+  const vmax = motor.vmax * LATERAL_EFFICIENCY;
+  const gap = (t: number) =>
+    detectionDistance + runDistance(vmax, motor.tau, t - reactionTime) - vehiclePosition(approach, t);
+  const pedSpeed = (t: number) => (t <= reactionTime ? 0 : vmax * (1 - Math.exp(-(t - reactionTime) / motor.tau)));
+  const carSpeed = (t: number) => Math.max(0, speed - deceleration * t);
+
+  // Aralık kapanıyorsa ilk sıfır geçişini adım adım ara, sonra ikiye bölerek incelt.
+  const dt = 0.01;
+  let prev = 0;
+  for (let t = dt; t <= PURSUIT_HORIZON; t += dt) {
+    if (gap(t) <= 0) {
+      let lo = prev;
+      let hi = t;
+      for (let i = 0; i < 40; i++) {
+        const mid = (lo + hi) / 2;
+        if (gap(mid) > 0) lo = mid;
+        else hi = mid;
+      }
+      return { impact: true, timeToImpact: hi, relativeSpeed: Math.max(0, carSpeed(hi) - pedSpeed(hi)) };
+    }
+    prev = t;
+  }
+  return { impact: false };
+}

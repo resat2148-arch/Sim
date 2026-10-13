@@ -12,6 +12,8 @@ import {
   lateralDisplacement,
   lateralEscape,
   movementBudget,
+  pursuit,
+  vehiclePosition,
 } from "./escape.ts";
 
 describe("approachTiming", () => {
@@ -110,5 +112,40 @@ describe("kaputa sıçrama", () => {
 
   it("sıçrayamayan kişi yükselmez", () => {
     expect(hipRiseAtImpact({ movementTime: 2, jumpHeight: 0, rng })).toBe(0);
+  });
+});
+
+describe("yol boyunca kaçış (pursuit)", () => {
+  const runner = { vmax: 7, tau: 1.2 };
+
+  it("araç yetişir; çarpma hızı araç hızından düşüktür", () => {
+    const p = pursuit({ speed: kmhToMs(50), detectionDistance: 15 }, 0.5, runner);
+    expect(p.impact).toBe(true);
+    if (!p.impact) return;
+    expect(p.timeToImpact).toBeGreaterThan(15 / kmhToMs(50));
+    expect(p.relativeSpeed).toBeLessThan(kmhToMs(50));
+    expect(p.relativeSpeed).toBeGreaterThan(kmhToMs(30));
+  });
+
+  it("hiç kıpırdamayan (tepkisi çok geç) yaya için sonuç düz çarpmayla aynı", () => {
+    const p = pursuit({ speed: kmhToMs(50), detectionDistance: 15 }, 5, runner);
+    expect(p.impact).toBe(true);
+    if (!p.impact) return;
+    expect(p.timeToImpact).toBeCloseTo(15 / kmhToMs(50), 6);
+    expect(p.relativeSpeed).toBeCloseTo(kmhToMs(50), 6);
+  });
+
+  it("yavaş araçtan hızlı koşucu kaçabilir", () => {
+    expect(pursuit({ speed: kmhToMs(15), detectionDistance: 10 }, 0.5, { vmax: 9, tau: 1 }).impact).toBe(false);
+  });
+
+  it("frenleyen araç yaya kaçarken durabilir", () => {
+    expect(pursuit({ speed: kmhToMs(50), detectionDistance: 12, deceleration: 7 }, 0.5, runner).impact).toBe(false);
+  });
+
+  it("vehiclePosition frenle durduktan sonra sabit kalır", () => {
+    const a = { speed: 10, detectionDistance: 0, deceleration: 5 };
+    expect(vehiclePosition(a, 2)).toBeCloseTo(10);
+    expect(vehiclePosition(a, 5)).toBeCloseTo(10);
   });
 });

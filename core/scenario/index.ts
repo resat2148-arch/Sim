@@ -54,3 +54,5 @@ export function formatSourcesDe(sources: readonly Source[]): string {
   const lines = sources.map((s) => `• ${s.citation}: ${s.title}${s.url ? ` – ${s.url}` : ""}`);
   return ["Quellen:", ...lines].join("\n");
 }
+
+export * from "./results.ts";
