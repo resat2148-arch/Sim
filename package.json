@@ -22,7 +22,7 @@
     "short:render": "remotion render core/render/index.ts Short out/median-crossing/short.mp4 --props=out/median-crossing/short-props.json",
     "hf:build": "tsx scripts/hyperframes-build.ts",
     "hf:check": "cd out/median-crossing/hyperframes && hyperframes check",
-    "hf:render": "cd out/median-crossing/hyperframes && hyperframes render --quality standard -o ../hyperframes-deneme.mp4"
+    "hf:render": "cd out/median-crossing/hyperframes && hyperframes render --quality high -o ../short.mp4"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

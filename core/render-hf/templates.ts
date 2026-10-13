@@ -19,6 +19,8 @@ const CRITICAL = "#d03b3b";
 export const HOOK_S = DURATIONS.hook / FPS;
 export const ATTEMPT_S = ATTEMPT_LENGTH / FPS;
 export const SCOREBOARD_S = DURATIONS.scoreboard / FPS;
+export const LESSON_S = DURATIONS.lesson / FPS;
+export const CLOSING_S = DURATIONS.closing / FPS;
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const r3 = (x: number) => Math.round(x * 1000) / 1000;
@@ -68,7 +70,8 @@ export function hookHtml(p: ShortProps): string {
     `      .hook { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding-top: 260px; font-family: ${FONT}; }
       .hook .title { font-size: 44px; color: ${INK}; background: ${PAPER}; padding: 10px 24px; border-radius: 14px; font-weight: 600; }
       .hook .question { margin-top: 40px; font-weight: 900; font-size: 112px; line-height: 1.05; color: ${PAPER}; text-align: center;
-        text-shadow: 0 6px 0 #0b0b0b, 0 0 30px rgba(0,0,0,0.6); padding: 0 60px; opacity: 0; transform: scale(0.6); }`,
+        text-shadow: 0 6px 0 #0b0b0b; background: rgba(11,11,11,0.62); border-radius: 40px; padding: 30px 56px; margin-left: 50px; margin-right: 50px;
+        opacity: 0; transform: scale(0.6); }`,
     `    <div class="hook">
       <div class="title">${esc(p.titleDe)}</div>
       <div class="question">${esc(p.hookQuestionDe)}</div>
@@ -137,6 +140,40 @@ ${p.scoreboard.map(row).join("\n")}
             onUpdate: () => { val.textContent = Math.round(counter.v) + " %"; } }, at);
           tl.to(row.querySelector(".sub"), { opacity: 1, duration: 0.5 }, at + 0.3);
         });`,
+  );
+}
+
+/** 4) Ders: ciddi ton, tek cümle. */
+export function lessonHtml(p: ShortProps): string {
+  return subComposition(
+    "lesson",
+    LESSON_S,
+    `      .lesson { position: absolute; inset: 0; background: #14181d; display: flex; align-items: center; padding: 90px; font-family: ${FONT}; color: ${PAPER}; }
+      .lesson .inner { opacity: 0; }
+      .lesson .kicker { font-size: 48px; font-weight: 600; color: #c3c2b7; margin-bottom: 36px; }
+      .lesson .text { font-size: 88px; font-weight: 800; line-height: 1.15; }`,
+    `    <div class="lesson"><div class="inner">
+      <div class="kicker">Was wirklich hilft</div>
+      <div class="text">${esc(p.lessonDe)}</div>
+    </div></div>`,
+    `        tl.to(q(".inner"), { opacity: 1, duration: 0.4, ease: "none" }, 0);`,
+  );
+}
+
+/** 5) Kapanış sorusu: yorum tetikleyici. */
+export function closingHtml(p: ShortProps): string {
+  return subComposition(
+    "closing",
+    CLOSING_S,
+    `      .closing { position: absolute; inset: 0; background: #f4c400; display: flex; justify-content: center; align-items: center; padding: 80px; font-family: ${FONT}; }
+      .closing .inner { text-align: center; color: ${INK}; transform: scale(0.7); }
+      .closing .q { font-size: 124px; font-weight: 900; line-height: 1.05; }
+      .closing .cta { font-size: 52px; font-weight: 600; margin-top: 40px; }`,
+    `    <div class="closing"><div class="inner">
+      <div class="q">${esc(p.closingQuestionDe)}</div>
+      <div class="cta">Schreib's in die Kommentare 👇</div>
+    </div></div>`,
+    `        tl.to(q(".inner"), { scale: 1, duration: 0.5, ease: "back.out(2)" }, 0);`,
   );
 }
 

@@ -20,7 +20,8 @@ core/        Bir kez yazılır, tüm senaryolar kullanır
   risk       Literatürden kalibre edilmiş risk fonksiyonları
              (çarpma hızı, yaş, araç önü, duruş -> ağır yaralanma / ölüm olasılığı)
   ragdoll    Görsel fizik (Rapier). SADECE gösterim içindir.
-  render     Remotion Short şablonu (1080x1920, 30 fps)
+  render-hf  HyperFrames Short şablonu (1080x1920, 30 fps) — aktif
+  render     Remotion Short şablonu (eski; HyperFrames doğrulanınca silinecek)
 modules/     Yeni fizik türü gerektiğinde bir kez yazılır (su, yapı çökmesi, duman...)
 scenarios/   Her tehlike bir dosya: ortam, tehlike, denenecek hareketler, veri, kaynaklar
 ```
@@ -28,14 +29,14 @@ scenarios/   Her tehlike bir dosya: ortam, tehlike, denenecek hareketler, veri, 
 ### Temel kurallar
 
 1. **Sayılar ragdoll'dan çıkmaz.** Ragdoll gerçek yaralanma hesaplayamaz. Olasılıklar, literatürden kalibre edilmiş modellerden ve Monte Carlo'dan gelir; ragdoll yalnızca bir örnek koşuyu görselleştirir.
-2. **Önce simülasyon, sonra render.** Remotion kareleri bağımsız ve paralel render eder; fizik motoru Remotion içinde canlı çalıştırılmaz. Akış şöyle:
-   `scenario config -> sim (Node, deterministik) -> results.json + trajectory.json -> Remotion oynatır -> mp4`
+2. **Önce simülasyon, sonra render.** HyperFrames her kareyi bağımsız olarak (`hf-seek`) çizer; fizik motoru render içinde canlı çalıştırılmaz. Akış şöyle:
+   `scenario config -> sim (Node, deterministik) -> results.json + trajectory.json -> short-props.json -> HyperFrames oynatır -> mp4`
 3. **Her senaryonun kaynakları** dosyanın içinde listelenir ve video açıklamasına girer.
 4. **Sonuçlar "model tahmini" olarak sunulur**, mümkünse belirsizlik aralığıyla. Sahte kesinlik yok.
 
 ### Stack (öneri)
 
-TypeScript, Node; Three.js + `@dimforge/rapier3d-compat` (ragdoll); Remotion + `@remotion/three`. Gerekirse insan modeli için MuJoCo WASM'a geçilebilir.
+TypeScript, Node; Three.js + `@dimforge/rapier3d-compat` (ragdoll); HyperFrames (HTML + GSAP + düz three.js; kullanıcı onayladı, Apache 2.0). Telemetri kapalı tutulur (`hyperframes telemetry disable`). Gerekirse insan modeli için MuJoCo WASM'a geçilebilir.
 
 ## Shorts iskeleti (kullanıcı onayladı)
 
@@ -70,7 +71,7 @@ TypeScript, Node; Three.js + `@dimforge/rapier3d-compat` (ragdoll); Remotion + `
 
 ### Faz 1: Telefondan, bulut oturumunda (şimdi)
 
-Kullanıcının bilgisayarı şu an arızalı; video render'ı yapılmayacak.
+Kullanıcının bilgisayarı şu an arızalı. Bulut ortamında yazılımsal GPU ile tam video render edilebiliyor (30 sn'lik Short ≈ 1,5–2 dk); MP4 dosya olarak gönderilir.
 
 1. Proje iskeleti, klasör yapısı, testler
 2. `core/dummies`: vücut profilleri ve hareket kapasiteleri

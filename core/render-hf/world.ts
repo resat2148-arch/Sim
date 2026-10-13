@@ -14,9 +14,12 @@ import { poseAt, smoothedTorso } from "../render/three/sample.ts";
 import { attemptTime, FPS, HEIGHT, PLAY_FROM, WIDTH } from "../render/timeline.ts";
 
 export interface WorldData {
-  readonly trajectory: Trajectory;
-  /** Bileşim zamanında denemenin başladığı saniye. */
-  readonly attemptStart: number;
+  /** Denemeler sırayla; Hook ilk denemenin trajektorisini kullanır. */
+  readonly trajectories: readonly Trajectory[];
+  /** Hook'un bittiği, ilk denemenin başladığı saniye. */
+  readonly hookEnd: number;
+  /** Her denemenin süresi (s). */
+  readonly attemptDuration: number;
 }
 
 declare global {
@@ -111,17 +114,19 @@ function buildPart(shape: Shape): THREE.Group {
   return g;
 }
 
-/** Bileşim zamanı (s) -> trajektori zamanı (s). Remotion sürümüyle aynı eşleme. */
-export function trajectoryTime(time: number, data: WorldData): number {
-  if (time < data.attemptStart) {
+/** Bileşim zamanı (s) -> hangi deneme ve trajektori zamanı (s). Remotion sürümüyle aynı eşleme. */
+export function worldTime(time: number, data: WorldData): { index: number; t: number } {
+  if (time < data.hookEnd) {
     // Hook: ilk 0,5 s sahne akar, sonra donar.
-    return PLAY_FROM + Math.min(time, 0.5);
+    return { index: 0, t: PLAY_FROM + Math.min(time, 0.5) };
   }
-  return attemptTime(Math.round((time - data.attemptStart) * FPS), data.trajectory.duration);
+  const n = data.trajectories.length;
+  const index = Math.min(n - 1, Math.floor((time - data.hookEnd) / data.attemptDuration + 1e-9));
+  const frame = Math.round((time - data.hookEnd - index * data.attemptDuration) * FPS);
+  return { index, t: attemptTime(frame, data.trajectories[index]!.duration) };
 }
 
 export function mountWorld(canvas: HTMLCanvasElement, data: WorldData): (time: number) => void {
-  const tr = data.trajectory;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1);
   renderer.setSize(WIDTH, HEIGHT, false);
@@ -133,20 +138,28 @@ export function mountWorld(canvas: HTMLCanvasElement, data: WorldData): (time: n
   sun.position.set(8, 12, 6);
   scene.add(sun);
   buildRoad(scene);
-  const car = buildCar(tr);
-  scene.add(car);
-  const parts = tr.parts.map((p) => {
-    const m = buildPart(p.shape);
-    scene.add(m);
-    return m;
+
+  // Her deneme kendi aracı ve kendi boyutlarındaki dummy'siyle; yalnızca o an oynayan görünür.
+  const actors = data.trajectories.map((tr) => {
+    const group = new THREE.Group();
+    const car = buildCar(tr);
+    group.add(car);
+    const parts = tr.parts.map((p) => {
+      const m = buildPart(p.shape);
+      group.add(m);
+      return m;
+    });
+    const torsoIdx = tr.parts.findIndex((p) => p.name === "torso");
+    scene.add(group);
+    return { tr, group, car, parts, startZ: tr.frames[0]!.parts[torsoIdx]![2]! };
   });
 
   const camera = new THREE.PerspectiveCamera(52, WIDTH / HEIGHT, 0.1, 200);
-  const torsoIdx = tr.parts.findIndex((p) => p.name === "torso");
-  const startZ = tr.frames[0]!.parts[torsoIdx]![2]!;
 
   return (time: number) => {
-    const t = trajectoryTime(time, data);
+    const { index, t } = worldTime(time, data);
+    actors.forEach((a, i) => (a.group.visible = i === index));
+    const { tr, car, parts, startZ } = actors[index]!;
     const pose = poseAt(tr, t);
     car.position.x = pose.vehicleX;
     pose.parts.forEach((p, i) => {

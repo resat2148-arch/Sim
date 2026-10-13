@@ -1,22 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { attemptTime, FPS, PLAY_FROM } from "../render/timeline.ts";
-import { trajectoryTime } from "./world.ts";
-import { attemptHtml, disclaimerHtml, hookHtml, indexHtml, scoreboardHtml } from "./templates.ts";
+import { worldTime } from "./world.ts";
+import { attemptHtml, closingHtml, disclaimerHtml, hookHtml, indexHtml, lessonHtml, scoreboardHtml } from "./templates.ts";
 import { DISCLAIMER_DE, type ShortProps } from "../render/props.ts";
 
 const tr = { duration: 3.6 } as never;
-const data = { trajectory: tr, attemptStart: 2 };
+const tr2 = { duration: 4.1 } as never;
+const data = { trajectories: [tr, tr2], hookEnd: 2, attemptDuration: 4.2 };
 
 describe("HyperFrames zaman eşlemesi", () => {
   it("Hook: 0,5 s akar sonra donar (Remotion ile aynı)", () => {
-    expect(trajectoryTime(0, data)).toBe(PLAY_FROM);
-    expect(trajectoryTime(0.3, data)).toBeCloseTo(PLAY_FROM + 0.3);
-    expect(trajectoryTime(1.9, data)).toBeCloseTo(PLAY_FROM + 0.5);
+    expect(worldTime(0, data)).toEqual({ index: 0, t: PLAY_FROM });
+    expect(worldTime(0.3, data).t).toBeCloseTo(PLAY_FROM + 0.3);
+    expect(worldTime(1.9, data).t).toBeCloseTo(PLAY_FROM + 0.5);
   });
 
-  it("Deneme: Remotion'ın attemptTime'ı ile kare kare aynı", () => {
+  it("Denemeler: Remotion'ın attemptTime'ı ile kare kare aynı, doğru deneme seçilir", () => {
     for (let f = 0; f < 126; f++) {
-      expect(trajectoryTime(2 + f / FPS, data)).toBeCloseTo(attemptTime(f, 3.6), 9);
+      expect(worldTime(2 + f / FPS, data)).toEqual({ index: 0, t: attemptTime(f, 3.6) });
+      expect(worldTime(2 + 4.2 + f / FPS, data)).toEqual({ index: 1, t: attemptTime(f, 4.1) });
     }
   });
 });
@@ -38,6 +40,8 @@ describe("HyperFrames şablonları", () => {
       ["hook", hookHtml(props)],
       ["scoreboard", scoreboardHtml(props)],
       ["disclaimer", disclaimerHtml(DISCLAIMER_DE, 13.2)],
+      ["lesson", lessonHtml({ ...props, lessonDe: "Augen hoch" } as ShortProps)],
+      ["closing", closingHtml({ ...props, closingQuestionDe: "Was würdest du tun?" } as ShortProps)],
       ["attempt-0", attemptHtml("attempt-0", { nameDe: "Kurt", color: "#2a78d6", moveDe: "Springen", escaped: false, trajectory: tr })],
     ] as const) {
       expect(html).toContain(`data-composition-id="${id}"`);
