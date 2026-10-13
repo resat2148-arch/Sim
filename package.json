@@ -12,10 +12,12 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test",
-    "scenario": "tsx scripts/run-scenario.ts"
+    "scenario": "tsx scripts/run-scenario.ts",
+    "report": "tsx scripts/report.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "playwright-core": "^1.56.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.4"

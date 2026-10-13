@@ -30,23 +30,25 @@ import {
   type TrialOutcome,
 } from "../../core/scenario/index.ts";
 import { kmhToMs } from "../../core/units/index.ts";
+import type { ReportConfig } from "../../core/report/index.ts";
 
 export const META: ScenarioMeta = {
   id: "median-crossing",
   titleDe: "Auto kommt über den Mittelstreifen",
   hookQuestionDe: "Springen oder ausweichen?",
-  // TASLAK: kullanıcı onayı bekliyor.
-  lessonDe: "Nicht springen: sofort zur Seite, raus aus der Fahrlinie – jede Zehntelsekunde zählt.",
+  // Kullanıcı onayladı. Model bulgusu: zaman bütçesi hareketten daha belirleyici.
+  lessonDe: "Am Straßenrand: Augen hoch statt aufs Handy – und im Notfall sofort zur Seite.",
   sources: [...Object.values(DUMMY_SOURCES), ...Object.values(RISK_SOURCES)],
 };
 validateScenarioMeta(META);
 
 export const STRATEGIES = [
-  { id: "stehen", labelDe: "Stehen bleiben" },
-  { id: "ausweichen", labelDe: "Zur Seite" },
-  { id: "zurueck", labelDe: "Zurückweichen" },
-  { id: "springen", labelDe: "Springen" },
-  { id: "realitaet", labelDe: "Was Menschen wirklich tun" },
+  { id: "stehen", labelDe: "Stehen bleiben", inVideo: true },
+  { id: "ausweichen", labelDe: "Zur Seite", inVideo: true },
+  // Kullanıcı kararı: raporda kalır, Short'ta gösterilmez (model iyimser olabilir).
+  { id: "zurueck", labelDe: "Zurückweichen", inVideo: false },
+  { id: "springen", labelDe: "Springen", inVideo: true },
+  { id: "realitaet", labelDe: "Was Menschen wirklich tun", inVideo: true },
 ] as const;
 export type StrategyId = (typeof STRATEGIES)[number]["id"];
 type Move = Exclude<StrategyId, "realitaet">;
@@ -70,12 +72,17 @@ export interface Conditions {
 export const BASE_CONDITIONS: Conditions = { speedKmh: 50, detectionDistance: 15, deceleration: 0, vehicle: "limousine" };
 
 const VEHICLE_WIDTH = 1.8;
+// VARSAYIM: geri çekilmede arkasını dönmenin ek süresi (180° dönüş, s).
+export const TURN_TIME = 0.4;
 // VARSAYIM: araç yayaya doğru gelir; orta hattı yayanın ±1,2 m'si içinde (düzgün).
 const AIM_SPREAD = 1.2;
 
+const dec = (x: number) => String(x).replace(".", ",");
+
 export const ASSUMPTIONS = [
+  `Geri çekilmede arkasını dönmek ${dec(TURN_TIME)} s ek süre alıyor; arkadan çarpılmanın duruş etkisi modellenmedi. Bu hareket videoda gösterilmez.`,
   "Araç frenlemiyor (sürücü kontrolü kaybetmiş); hız ve fark etme mesafesi her denemede sabit.",
-  `Aracın orta hattı yayanın ±${AIM_SPREAD} m'si içinde, düzgün dağılımlı; araç ${VEHICLE_WIDTH} m genişliğinde.`,
+  `Aracın orta hattı yayanın ±${dec(AIM_SPREAD)} m'si içinde, düzgün dağılımlı; araç ${dec(VEHICLE_WIDTH)} m genişliğinde.`,
   "Yana kaçışta doğru yönü seçme olasılığı: araç orta hattına göre ne kadar kenardaysa o kadar yüksek (ortada %50).",
   "Sedan ön kenarı 0,75 m (eğimli), SUV ön kenarı 1,05 m (küt).",
   "Gerçek davranış karışımı Soni et al. 2013'ten: gençler %60 kaçış; yaşlılar %40 kaçış, %38 donma, %22 geri çekilme. Gençlerde donma/geri çekilme 20/20 varsayıldı.",
@@ -122,7 +129,7 @@ export function simulateTrial(ctx: TrialContext, character: DummyCharacter, stra
   const standing = lateralContact(offset, VEHICLE_WIDTH, half);
 
   if (move === "zurueck") {
-    const p = pursuit(approach, motor.reactionTime, motor);
+    const p = pursuit(approach, motor.reactionTime + TURN_TIME, motor);
     if (!p.impact) return { contact: false, ...NO_CONTACT_RISK };
     return hit(p.relativeSpeed, standing, motor.hipHeight);
   }
@@ -203,9 +210,53 @@ export function run(options: RunOptions = {}): ScenarioResults {
     seed,
     trials,
     characters: characters.map((c) => ({ id: c.id, nameDe: c.nameDe })),
-    strategies: STRATEGIES.map((s) => ({ id: s.id, labelDe: s.labelDe })),
+    strategies: STRATEGIES.map((s) => ({ id: s.id, labelDe: s.labelDe, inVideo: s.inVideo })),
     tables,
     sensitivity,
     assumptions: [...ASSUMPTIONS],
   };
 }
+
+export const REPORT: ReportConfig = {
+  describeTable: (t) =>
+    `${t.parameters.speedKmh} km/h, ${t.parameters.detectionDistance} m mesafede fark ediliyor (≈ ${(
+      Number(t.parameters.detectionDistance) / kmhToMs(Number(t.parameters.speedKmh))
+    )
+      .toFixed(1)
+      .replace(".", ",")} s), fren yok. Dummy ve hareket başına ${Number(t.parameters.trials).toLocaleString("de-DE")} deneme.`,
+  sweeps: [
+    {
+      prefix: "detection",
+      param: "detectionDistance",
+      strategyId: "ausweichen",
+      metric: "contact",
+      title: "Zaman her şey: araca temas oranı",
+      subtitle: "50 km/h; aracın fark edildiği mesafe değişiyor. Erken fark etmek = hareket için daha çok zaman.",
+      xLabel: "Fark etme mesafesi",
+      xUnit: "m",
+      marker: { x: BASE_CONDITIONS.detectionDistance, label: "Senaryo" },
+    },
+    {
+      prefix: "detection",
+      param: "detectionDistance",
+      strategyId: "realitaet",
+      metric: "fatal",
+      title: "Erken fark etmek: gerçek davranışta ölüm riski",
+      subtitle: "50 km/h; insanların gerçekte yaptığı karışım (Soni et al. 2013).",
+      xLabel: "Fark etme mesafesi",
+      xUnit: "m",
+      marker: { x: BASE_CONDITIONS.detectionDistance, label: "Senaryo" },
+    },
+    {
+      prefix: "speed",
+      param: "speedKmh",
+      strategyId: "realitaet",
+      metric: "fatal",
+      title: "Hızın etkisi: ölüm riski",
+      subtitle: "15 m'de fark ediliyor; insanların gerçekte yaptığı karışım.",
+      xLabel: "Araç hızı",
+      xUnit: "km/h",
+      marker: { x: BASE_CONDITIONS.speedKmh, label: "Senaryo" },
+    },
+  ],
+};

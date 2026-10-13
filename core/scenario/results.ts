@@ -40,7 +40,8 @@ export interface ScenarioResults {
   readonly seed: string;
   readonly trials: number;
   readonly characters: readonly { readonly id: string; readonly nameDe: string }[];
-  readonly strategies: readonly { readonly id: string; readonly labelDe: string }[];
+  /** inVideo: false olan stratejiler raporda görünür ama Short'a girmez. */
+  readonly strategies: readonly { readonly id: string; readonly labelDe: string; readonly inVideo: boolean }[];
   /** Ana sonuçlar (örn. araç tipine göre). */
   readonly tables: readonly ResultTable[];
   /** Duyarlılık analizleri (örn. fark etme mesafesi taraması). */
