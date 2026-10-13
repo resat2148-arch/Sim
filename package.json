@@ -19,12 +19,18 @@
     "short:props": "tsx scripts/short-props.ts",
     "short:studio": "remotion studio core/render/index.ts",
     "short:still": "remotion still core/render/index.ts Short --props=out/median-crossing/short-props.json --gl=swangle",
-    "short:render": "remotion render core/render/index.ts Short out/median-crossing/short.mp4 --props=out/median-crossing/short-props.json"
+    "short:render": "remotion render core/render/index.ts Short out/median-crossing/short.mp4 --props=out/median-crossing/short-props.json",
+    "hf:build": "tsx scripts/hyperframes-build.ts",
+    "hf:check": "cd out/median-crossing/hyperframes && hyperframes check",
+    "hf:render": "cd out/median-crossing/hyperframes && hyperframes render --quality standard -o ../hyperframes-deneme.mp4"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/three": "^0.186.0",
+    "esbuild": "^0.28.2",
+    "gsap": "^3.14.2",
+    "hyperframes": "^0.8.151",
     "playwright-core": "^1.56.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
