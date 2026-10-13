@@ -13,13 +13,20 @@ import {
   bodyInPath,
   compareStrategies,
   DEFAULT_TRIALS,
-  hipRiseAtImpact,
+  jumpRise,
+  LATERAL_EFFICIENCY,
   lateralContact,
+  lateralDisplacement,
   lateralEscape,
   movementBudget,
+  planJump,
   pursuit,
+  trialRng,
+  type LateralContact,
   type TrialContext,
 } from "../../core/montecarlo/index.ts";
+import { runDistance } from "../../core/dummies/index.ts";
+import type { MotionPlan, Vec3 } from "../../core/ragdoll/types.ts";
 import { impactRisk, NO_CONTACT_RISK, RISK_SOURCES, type VehicleFront } from "../../core/risk/index.ts";
 import {
   summarizeOutcomes,
@@ -108,20 +115,46 @@ function pickBehavior(age: number, u: number): Move {
   return "zurueck";
 }
 
-/** Tek deneme: aynı ctx tüm hareketlerde aynı dummy örneğini ve aynı araç yolunu verir. */
-export function simulateTrial(ctx: TrialContext, character: DummyCharacter, strategy: StrategyId, cond: Conditions): TrialOutcome {
+/** Bir denemenin tam planı: hem Monte Carlo sonucu hem ragdoll'un oynatacağı hareket. */
+export interface TrialPlan {
+  readonly move: Move;
+  readonly offset: number;
+  readonly approach: { readonly speed: number; readonly detectionDistance: number; readonly deceleration: number };
+  readonly reactionTime: number;
+  /** Fark etme anından temasa kadar geçen süre (s); temas yoksa null. */
+  readonly contactTime: number | null;
+  readonly outcome: TrialOutcome;
+  /** Yayanın başlangıç konumuna göre yer değiştirmesi (m): x araç yönü, y yukarı, z yan. */
+  rootAt(t: number): Vec3;
+}
+
+const ZERO: Vec3 = { x: 0, y: 0, z: 0 };
+// Görsel: kaçış hareketi çarpma anından bu kadar sonra durur (sonuca etkisi yok).
+const SETTLE_TIME = 0.6;
+
+/**
+ * Tek denemenin planı. Aynı ctx tüm hareketlerde aynı dummy örneğini ve aynı
+ * araç yolunu verir. Monte Carlo yalnızca `outcome`u kullanır; ragdoll aynı
+ * planın `rootAt` ve `contactTime` değerlerini oynatır (kural 1: sayılar buradan).
+ */
+export function planTrial(ctx: TrialContext, character: DummyCharacter, strategy: StrategyId, cond: Conditions): TrialPlan {
   const { body } = character;
   const motor = sampleMotor(motorCapacity(body), ctx.rng);
   const half = bodyHalfWidth(body.heightM);
   const front = VEHICLES[cond.vehicle].front;
   const offset = ctx.rng.fork("aim").uniform(-AIM_SPREAD, AIM_SPREAD);
   const approach = { speed: kmhToMs(cond.speedKmh), detectionDistance: cond.detectionDistance, deceleration: cond.deceleration };
+  const r = motor.reactionTime;
 
   const move: Move =
     strategy === "realitaet" ? pickBehavior(body.age, ctx.rng.fork("behavior").next()) : strategy;
 
-  const hit = (impactSpeed: number, contact: ReturnType<typeof lateralContact>, hipAtImpact: number): TrialOutcome => {
-    if (!contact.contact) return { contact: false, ...NO_CONTACT_RISK };
+  const plan = (contactTime: number | null, outcome: TrialOutcome, rootAt: (t: number) => Vec3): TrialPlan => ({
+    move, offset, approach, reactionTime: r, contactTime, outcome, rootAt,
+  });
+  const miss: TrialOutcome = { contact: false, ...NO_CONTACT_RISK };
+  const hit = (impactSpeed: number, contact: LateralContact, hipAtImpact: number): TrialOutcome => {
+    if (!contact.contact) return miss;
     const risk = impactRisk({ impactSpeed, age: body.age, front, hipAtImpact, bodyInPath: bodyInPath(contact, half) });
     return { contact: true, severe: risk.severe, fatal: risk.fatal };
   };
@@ -129,30 +162,47 @@ export function simulateTrial(ctx: TrialContext, character: DummyCharacter, stra
   const standing = lateralContact(offset, VEHICLE_WIDTH, half);
 
   if (move === "zurueck") {
-    const p = pursuit(approach, motor.reactionTime + TURN_TIME, motor);
-    if (!p.impact) return { contact: false, ...NO_CONTACT_RISK };
-    return hit(p.relativeSpeed, standing, motor.hipHeight);
+    const start = r + TURN_TIME;
+    const away = (t: number): Vec3 => ({ x: runDistance(motor.vmax * LATERAL_EFFICIENCY, motor.tau, t - start), y: 0, z: 0 });
+    const p = pursuit(approach, start, motor);
+    if (!p.impact) return plan(null, miss, away);
+    const outcome = hit(p.relativeSpeed, standing, motor.hipHeight);
+    return plan(outcome.contact ? p.timeToImpact : null, outcome, away);
   }
 
   const timing = approachTiming(approach);
-  if (!timing.impact) return { contact: false, ...NO_CONTACT_RISK };
-  const movementTime = movementBudget(timing.timeToImpact, motor.reactionTime);
+  if (!timing.impact) return plan(null, miss, () => ZERO);
+  const movementTime = movementBudget(timing.timeToImpact, r);
 
   switch (move) {
-    case "stehen":
-      return hit(timing.impactSpeed, standing, motor.hipHeight);
+    case "stehen": {
+      const outcome = hit(timing.impactSpeed, standing, motor.hipHeight);
+      return plan(outcome.contact ? timing.timeToImpact : null, outcome, () => ZERO);
+    }
     case "ausweichen": {
       const sideways = offset >= 0 ? 1 : -1;
       const pCorrect = 0.5 + 0.5 * Math.min(1, Math.abs(offset) / (VEHICLE_WIDTH / 2));
       const direction = ctx.rng.fork("direction").bernoulli(pCorrect) ? sideways : (-sideways as 1 | -1);
       const contact = lateralEscape({ offset, direction, movementTime, motor, vehicleWidth: VEHICLE_WIDTH, halfBody: half });
-      return hit(timing.impactSpeed, contact, motor.hipHeight);
+      const outcome = hit(timing.impactSpeed, contact, motor.hipHeight);
+      const stopAt = movementTime + SETTLE_TIME;
+      return plan(outcome.contact ? timing.timeToImpact : null, outcome, (t) => ({
+        x: 0,
+        y: 0,
+        z: direction * lateralDisplacement(motor, Math.min(Math.max(0, t - r), stopAt)),
+      }));
     }
     case "springen": {
-      const rise = hipRiseAtImpact({ movementTime, jumpHeight: motor.jumpHeight, rng: ctx.rng.fork("jump-timing") });
-      return hit(timing.impactSpeed, standing, motor.hipHeight + rise);
+      const jump = planJump({ movementTime, jumpHeight: motor.jumpHeight, rng: ctx.rng.fork("jump-timing") });
+      const outcome = hit(timing.impactSpeed, standing, motor.hipHeight + jumpRise(jump, movementTime));
+      return plan(outcome.contact ? timing.timeToImpact : null, outcome, (t) => ({ x: 0, y: jumpRise(jump, t - r), z: 0 }));
     }
   }
+}
+
+/** Monte Carlo için yalnızca sonuç. */
+export function simulateTrial(ctx: TrialContext, character: DummyCharacter, strategy: StrategyId, cond: Conditions): TrialOutcome {
+  return planTrial(ctx, character, strategy, cond).outcome;
 }
 
 function runTable(
@@ -260,3 +310,56 @@ export const REPORT: ReportConfig = {
     },
   ],
 };
+
+// --- Ragdoll örneği -----------------------------------------------------------
+
+export interface SampleRequest {
+  readonly characterId: string;
+  readonly strategy: StrategyId;
+  readonly vehicle?: VehicleId;
+  /**
+   * Verilmezse tipik deneme: ilk 1000 denemede çoğunluk sonucunu (temas / kaçış)
+   * paylaşanlar arasından, ölüm riski ve tepki süresi medyana en yakın olan.
+   */
+  readonly trial?: number;
+  readonly seed?: string;
+}
+
+/** Videoda gösterilecek tek denemeyi seçer ve ragdoll planına çevirir. */
+export function sampleForRagdoll(req: SampleRequest): { trial: number; plan: TrialPlan; motion: MotionPlan } {
+  const character = CAST.find((c) => c.id === req.characterId);
+  if (!character) throw new Error(`Bilinmeyen karakter: ${req.characterId}`);
+  const cond = { ...BASE_CONDITIONS, vehicle: req.vehicle ?? BASE_CONDITIONS.vehicle };
+  const seed = req.seed ?? META.id;
+  const at = (index: number) => planTrial({ index, rng: trialRng(seed, index) }, character, req.strategy, cond);
+
+  let trial = req.trial;
+  if (trial === undefined) {
+    const first = Array.from({ length: 1000 }, (_, i) => ({ i, plan: at(i) }));
+    const majority = first.filter((x) => x.plan.outcome.contact).length * 2 >= first.length;
+    const pool = first.filter((x) => x.plan.outcome.contact === majority);
+    const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!;
+    const mRisk = median(pool.map((x) => x.plan.outcome.fatal.p));
+    const mReact = median(pool.map((x) => x.plan.reactionTime));
+    // Önce risk (sonucun tipikliği), eşitlikte tepki süresi (hareketin tipikliği).
+    const score = (x: (typeof pool)[number]) =>
+      Math.abs(x.plan.outcome.fatal.p - mRisk) * 100 + Math.abs(x.plan.reactionTime - mReact);
+    trial = pool.reduce((best, x) => (score(x) < score(best) ? x : best)).i;
+  }
+  const plan = at(trial);
+  const motion: MotionPlan = {
+    body: character.body,
+    vehicle: {
+      front: VEHICLES[cond.vehicle].front,
+      width: VEHICLE_WIDTH,
+      speed: plan.approach.speed,
+      deceleration: plan.approach.deceleration,
+      detectionDistance: plan.approach.detectionDistance,
+    },
+    start: { x: 0, y: 0, z: plan.offset },
+    rootAt: plan.rootAt,
+    contactTime: plan.contactTime,
+    duration: plan.approach.detectionDistance / plan.approach.speed + 3,
+  };
+  return { trial, plan, motion };
+}

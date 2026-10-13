@@ -121,15 +121,39 @@ export interface JumpInput {
  * sonra olursa yükselme 0'dır (yüksek zaman bütçesinde erken zıplayıp
  * araca yere inmişken yakalanmak da mümkündür).
  */
-export function hipRiseAtImpact({ movementTime, jumpHeight, rng, timingSd = JUMP_TIMING_SD }: JumpInput): number {
-  if (jumpHeight <= 0 || movementTime < JUMP_PREP_TIME) return 0;
+export interface JumpPlan {
+  /** Hareketin başlangıcından (tepki sonu) kalkışa kadar geçen süre (s). */
+  readonly takeoff: number;
+  /** Kalkış hızı (m/s). */
+  readonly v0: number;
+}
+
+/**
+ * Zıplamanın zamanlaması. Kişi zirveyi çarpma anına denk getirmeye çalışır
+ * ama fiziksel olarak JUMP_PREP_TIME'dan önce kalkamaz. Zaman yetmezse null.
+ */
+export function planJump({ movementTime, jumpHeight, rng, timingSd = JUMP_TIMING_SD }: JumpInput): JumpPlan | null {
+  if (jumpHeight <= 0 || movementTime < JUMP_PREP_TIME) return null;
   const v0 = Math.sqrt(2 * G * jumpHeight);
-  const tApex = v0 / G;
-  const intended = movementTime - tApex + rng.normal(0, timingSd);
-  const takeoff = Math.max(JUMP_PREP_TIME, intended);
-  const s = movementTime - takeoff;
-  if (s <= 0 || s >= 2 * tApex) return 0;
-  return v0 * s - (G * s * s) / 2;
+  const intended = movementTime - v0 / G + rng.normal(0, timingSd);
+  return { takeoff: Math.max(JUMP_PREP_TIME, intended), v0 };
+}
+
+/** Hareket başlangıcından s saniye sonra kalçanın yükselmesi (m); yerdeyken 0. */
+export function jumpRise(plan: JumpPlan | null, s: number): number {
+  if (!plan) return 0;
+  const air = s - plan.takeoff;
+  if (air <= 0 || air >= (2 * plan.v0) / G) return 0;
+  return plan.v0 * air - (G * air * air) / 2;
+}
+
+/**
+ * Çarpma anında kalçanın ayakta duruşa göre ne kadar yükseldiği (m).
+ * Çarpma kalkıştan önce ya da inişten sonra olursa yükselme 0'dır (yüksek
+ * zaman bütçesinde erken zıplayıp yere inmişken yakalanmak da mümkündür).
+ */
+export function hipRiseAtImpact(input: JumpInput): number {
+  return jumpRise(planJump(input), input.movementTime);
 }
 
 /** Gövdenin araç yolunda kalan oranı (0–1): örtüşme / gövde genişliği. */

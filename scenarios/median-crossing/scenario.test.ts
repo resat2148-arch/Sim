@@ -70,3 +70,19 @@ describe("median-crossing", () => {
     }
   });
 });
+
+describe("ragdoll örneği", () => {
+  it("seçilen tipik deneme çoğunluk sonucunu paylaşır ve plan Monte Carlo ile aynı", async () => {
+    const { planTrial, sampleForRagdoll, simulateTrial, BASE_CONDITIONS } = await import("./scenario.ts");
+    const { trialRng } = await import("../../core/montecarlo/index.ts");
+    const { getCharacter } = await import("../../core/dummies/index.ts");
+    const kurtTable = findCell(sedan, "kurt", "ausweichen");
+    const { trial, plan } = sampleForRagdoll({ characterId: "kurt", strategy: "ausweichen" });
+    expect(plan.outcome.contact).toBe(kurtTable.contact.p >= 0.5);
+    const ctx = { index: trial, rng: trialRng("median-crossing", trial) };
+    const ctx2 = { index: trial, rng: trialRng("median-crossing", trial) };
+    expect(planTrial(ctx, getCharacter("kurt"), "ausweichen", BASE_CONDITIONS).outcome).toEqual(
+      simulateTrial(ctx2, getCharacter("kurt"), "ausweichen", BASE_CONDITIONS),
+    );
+  });
+});

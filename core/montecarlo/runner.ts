@@ -8,7 +8,8 @@ export interface TrialContext {
   readonly rng: Rng;
 }
 
-function trialRng(seed: Seed, index: number): Rng {
+/** i. denemenin rng akışı; ragdoll aynı denemeyi yeniden kurmak için de kullanır. */
+export function trialRng(seed: Seed, index: number): Rng {
   return createRng(seed).fork(`trial:${index}`);
 }
 
